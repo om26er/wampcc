@@ -23,8 +23,9 @@
 #include <iostream>
 #include <iterator>
 
-#include <string.h>
 #include <assert.h>
+#include <openssl/err.h>
+#include <string.h>
 
 #include <openssl/evp.h>
 
@@ -946,7 +947,6 @@ void wamp_session::handle_HELLO(json_array& ja)
   send_msg( msg );
 }
 
-
 void wamp_session::handle_CHALLENGE(json_array& ja)
 {
   /* EV thread */
@@ -972,7 +972,6 @@ void wamp_session::handle_CHALLENGE(json_array& ja)
   } else {
 
     if (authmethod == WAMP_WAMPCRA) {
-
       std::string challmsg = json_get_copy(extra, "challenge", "").as_string();
       if (challmsg == "")
         throw auth_error(WAMP_ERROR_AUTHENTICATION_FAILED,
@@ -1019,6 +1018,18 @@ void wamp_session::handle_CHALLENGE(json_array& ja)
       else
         throw auth_error(WAMP_ERROR_AUTHENTICATION_FAILED,
                          "failed to compute HMAC SHA256 diget");
+    } else if (authmethod == WAMP_CRYPTOSIGN) {
+      std::string challmsg = json_get_copy(extra, "challenge", "").as_string();
+      if (challmsg.empty())
+        throw auth_error(WAMP_ERROR_AUTHENTICATION_FAILED,
+                         "challenge not found in Extra");
+
+      std::string key = m_client_secret_fn();
+
+      std::string signedCh = sign_challenge(load_ed25519_from_hex(key), challmsg);
+
+      json_array msg{wamp_msg_authenticate, signedCh + challmsg, json_object()};
+      send_msg(msg);
 
     } else if (authmethod == WAMP_TICKET) {
 
@@ -1028,10 +1039,73 @@ void wamp_session::handle_CHALLENGE(json_array& ja)
 
     } else
       throw auth_error(WAMP_ERROR_AUTHENTICATION_FAILED,
-                       "unknown AuthMethod (only wampcra supported)");
+                       "unknown AuthMethod (only wampcra and crpytosign are supported)");
   }
 }
 
+std::vector<unsigned char> wamp_session::hex_to_bytes(const std::string& hex) {
+  unsigned char* buf = nullptr;
+  long len = 0;
+
+  buf = OPENSSL_hexstr2buf(hex.c_str(), &len);
+  if (!buf) throw std::runtime_error("Invalid hex string");
+
+  std::vector<unsigned char> bytes(buf, buf + len);
+  OPENSSL_free(buf);
+  return bytes;
+}
+
+std::string wamp_session::bytes_to_hex(const std::vector<unsigned char>& bytes) {
+  char* hexstr = OPENSSL_buf2hexstr(bytes.data(), bytes.size());
+  if (!hexstr) throw std::runtime_error("Failed to convert bytes to hex");
+
+  std::string hex(hexstr);
+
+  // OPENSSL_buf2hexstr returns strings like "DE:AD:BE:EF"
+  // so we strip the colons if you want plain hex
+  hex.erase(std::remove(hex.begin(), hex.end(), ':'), hex.end());
+
+  OPENSSL_free(hexstr);
+  return hex;
+}
+
+EVP_PKEY* wamp_session::load_ed25519_from_hex(const std::string& hexPriv) {
+  std::vector<unsigned char> priv = hex_to_bytes(hexPriv);
+  if (priv.size() != 32) {
+    std::cerr << "Private key must be 32 bytes (64 hex chars)\n";
+    return nullptr;
+  }
+
+  EVP_PKEY* pkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, nullptr,
+                                                priv.data(), priv.size());
+  if (!pkey) {
+    ERR_print_errors_fp(stderr);
+  }
+
+  return pkey;
+}
+
+std::string wamp_session::sign_challenge(EVP_PKEY* pkey, const std::string& challenge_hex) {
+  std::vector<unsigned char> sig(64); // Ed25519 signatures are always 64 bytes
+  size_t siglen = sig.size();
+
+  std::vector<unsigned char> challenge = hex_to_bytes(challenge_hex);
+
+  EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+  if (!mdctx) throw std::runtime_error("Failed to create MD_CTX");
+
+  if (EVP_DigestSignInit(mdctx, nullptr, nullptr, nullptr, pkey) <= 0)
+    throw std::runtime_error("EVP_DigestSignInit failed");
+
+  if (EVP_DigestSign(mdctx, sig.data(), &siglen,
+                     challenge.data(), challenge.size()) <= 0)
+    throw std::runtime_error("EVP_DigestSign failed");
+
+  EVP_MD_CTX_free(mdctx);
+
+  sig.resize(siglen);
+  return bytes_to_hex(sig);
+}
 
 void wamp_session::handle_AUTHENTICATE(json_array& ja)
 {
@@ -1234,6 +1308,14 @@ std::future<void> wamp_session::hello(client_credentials cc)
       opt[ "roles" ] = std::move( roles );
       opt[ "agent" ] = package_string();
       opt[ "authid"] = std::move(cc.authid);
+
+      json_object extra;
+      for (const auto& item : cc.authmethods) {
+        if (item == "cryptosign") {
+          extra["pubkey"] = cc.public_key;
+          opt["authextra"] = extra;
+        }
+      }
 
       json_array& ja = json_insert<json_array>(opt, "authmethods");
       for (auto item : cc.authmethods)

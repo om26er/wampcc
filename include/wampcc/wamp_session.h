@@ -14,10 +14,11 @@
 #include "wampcc/json.h"
 #include "wampcc/tcp_socket.h"
 
-#include <map>
-#include <mutex>
-#include <memory>
 #include <future>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <openssl/types.h>
 #include <set>
 
 namespace wampcc {
@@ -177,6 +178,8 @@ struct client_credentials
   std::string realm;
   std::string authid;
   std::vector< std::string > authmethods;
+
+  std::string public_key;
 
   /* If authmethods includes 'wampcra', this callback must be provided and
    * shall return the password associated with the authid. */
@@ -910,6 +913,10 @@ private:
   void transition_to_closed();
 
   void handle_HELLO(json_array& ja);
+  std::string bytes_to_hex(const std::vector<unsigned char>& bytes);
+  EVP_PKEY* load_ed25519_from_hex(const std::string& hexPriv);
+  std::vector<unsigned char> hex_to_bytes(const std::string& hex);
+  std::string sign_challenge(EVP_PKEY* pkey, const std::string& challenge);
   void handle_CHALLENGE(json_array& ja);
   void handle_AUTHENTICATE(json_array& ja);
   void send_WELCOME();

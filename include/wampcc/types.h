@@ -53,6 +53,7 @@ namespace wampcc
 // WAMP string constants
 #define WAMP_WAMPCRA "wampcra"
 #define WAMP_TICKET "ticket"
+#define WAMP_CRYPTOSIGN "cryptosign"
 #define WAMP_ACKNOWLEDGE "acknowledge"
 #define WAMP_ANONYMOUS "anonymous"
 

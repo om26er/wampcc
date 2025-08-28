@@ -16,11 +16,9 @@ int main(int argc, char** argv)
 {
   try
   {
-    if (argc < 3)
-      throw std::runtime_error("arguments must be: ADDR PORT RPC_URI (RPC_URI defaults to 'greeting')");
-    const char* host = argv[1];
-    int port = std::stoi(argv[2]);
-    std::string rpc_uri = (argc > 3)? argv[3]:"greeting";
+    const char* host = "0.0.0.0";
+    int port = 8080;
+    std::string rpc_uri = "greeting";
     /* Create the wampcc kernel, which provides event and IO threads. */
 
     std::unique_ptr<kernel> the_kernel(new kernel({}, logger::nolog()));
@@ -53,10 +51,15 @@ int main(int argc, char** argv)
     /* Logon to a WAMP realm, and wait for session to be deemed open. */
 
     client_credentials credentials;
-    credentials.realm="default_realm";
-    credentials.authid="peter";
-    credentials.authmethods = {"wampcra"};
-    credentials.secret_fn = []() -> std::string { return "secret2"; };
+    credentials.realm="realm1";
+    credentials.authid="john";
+    credentials.authmethods = {"cryptosign"};
+<<<<<<< Updated upstream
+    credentials.secret_fn = []() -> std::string { return "10f82a0592fbd228a96a15787198069c3cdc39d8d611d733b17591987e1b6c1e"; };
+=======
+    credentials.public_key = "d058f7836630303779e026320ec35c509788c597fdaa8f5ae8c28129d81cff01";
+    credentials.secret_fn = []() -> std::string { return "48cd7b32543e5c294b354847a20250550e17bf42f41d58d4736e6dbd526d355c"; };
+>>>>>>> Stashed changes
 
     auto logon_fut = session->hello(credentials);
 
@@ -75,7 +78,13 @@ int main(int argc, char** argv)
                     try {
                       std::cout << "rpc result: " << r.args.args_list << std::endl;
                       ready_to_exit.set_value();
+<<<<<<< Updated upstream
                     } catch (...) { /* ignore promise already set error */}
+=======
+                    } catch (...) {
+                      std::cout << "fail";
+                    }
+>>>>>>> Stashed changes
                   });
 
     /* Wait for RPC completion or until wamp session is closed. */
