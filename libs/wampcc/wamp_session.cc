@@ -660,6 +660,7 @@ void wamp_session::process_message(json_array& ja,
     }
     else
     {
+
       if (message_type == msg_type::wamp_msg_challenge)
       {
         change_state(state::sent_hello, state::recv_challenge);

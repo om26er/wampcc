@@ -7,8 +7,9 @@
 
 #include "wampcc/wampcc.h"
 
-#include <memory>
+#include <assert.h>
 #include <iostream>
+#include <memory>
 
 using namespace wampcc;
 
@@ -36,6 +37,9 @@ int main(int argc, char** argv)
 
     /* Using the connected socket, now create the wamp session object. */
 
+    websocket_protocol::options ws_opts;
+    ws_opts.serialisers = static_cast<int>(serialiser_type::msgpack);
+
     std::promise<void> ready_to_exit;
     std::shared_ptr<wamp_session> session = wamp_session::create<websocket_protocol>(
       the_kernel.get(),
@@ -46,7 +50,7 @@ int main(int argc, char** argv)
             ready_to_exit.set_value();
           }
           catch (...) { /* ignore promise already set error */ }
-      }, {});
+      }, ws_opts);
 
     /* Logon to a WAMP realm, and wait for session to be deemed open. */
 
@@ -54,12 +58,8 @@ int main(int argc, char** argv)
     credentials.realm="realm1";
     credentials.authid="john";
     credentials.authmethods = {"cryptosign"};
-<<<<<<< Updated upstream
-    credentials.secret_fn = []() -> std::string { return "10f82a0592fbd228a96a15787198069c3cdc39d8d611d733b17591987e1b6c1e"; };
-=======
-    credentials.public_key = "d058f7836630303779e026320ec35c509788c597fdaa8f5ae8c28129d81cff01";
-    credentials.secret_fn = []() -> std::string { return "48cd7b32543e5c294b354847a20250550e17bf42f41d58d4736e6dbd526d355c"; };
->>>>>>> Stashed changes
+    credentials.public_key = "4bf3d505110f39d3268147a38776468c4291e2ad690ddcf86c7a3351f2a00c6f";
+    credentials.secret_fn = []() -> std::string { return "bf0ad88b15d75447e4f863e80a9d1033097ee368d3013ff9c1eb4a4deca3d096"; };
 
     auto logon_fut = session->hello(credentials);
 
@@ -70,21 +70,23 @@ int main(int argc, char** argv)
       throw std::runtime_error("session logon failed");
 
     /* Session is now open, call a remote procedure. */
+    const char raw_data[] = {0x01, 0x02, 0x03, 0x04, 0x05};
+    size_t raw_size = sizeof(raw_data);
+    json_value jbin = json_value::make_binary(raw_data, raw_size);
 
     wamp_args call_args;
-    call_args.args_list = json_array({"hello from basic_caller"});
+    call_args.args_list = json_array({jbin});
     session->call(rpc_uri, {}, call_args,
-                  [&ready_to_exit](wampcc::wamp_session&, result_info r) {
+                  [=, &ready_to_exit](wampcc::wamp_session&, result_info r) {
                     try {
-                      std::cout << "rpc result: " << r.args.args_list << std::endl;
+                      json_value valRet = r.args.args_list[0];
+                      json_binary bin = valRet.as_binary();
+                      assert(jbin == valRet);
+                      std::cout << "rpc result: " << bin.data() << std::endl;
                       ready_to_exit.set_value();
-<<<<<<< Updated upstream
-                    } catch (...) { /* ignore promise already set error */}
-=======
                     } catch (...) {
-                      std::cout << "fail";
+                      std::cerr << "exception: " << std::endl;
                     }
->>>>>>> Stashed changes
                   });
 
     /* Wait for RPC completion or until wamp session is closed. */

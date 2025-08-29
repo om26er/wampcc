@@ -106,8 +106,9 @@ static bool header_contains(const std::string & source,
 
 void websocket_protocol::send_msg(const json_array& ja)
 {
-  if (!have_codec())
+  if (!have_codec()) {
     return;
+  }
 
   LOG_TRACE("fd: " << fd() << ", json_tx: " << ja);
 
@@ -116,7 +117,10 @@ void websocket_protocol::send_msg(const json_array& ja)
   {
     case serialiser_type::none: return;
     case serialiser_type::json: op = websocketpp::frame::opcode::text; break;
-    case serialiser_type::msgpack: op = websocketpp::frame::opcode::binary; break;
+    case serialiser_type::msgpack: {
+      op = websocketpp::frame::opcode::binary;
+      break;
+    };
   }
 
   auto bytes = encode(ja);

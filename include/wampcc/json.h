@@ -62,7 +62,8 @@ typedef enum {
   eSTRING,
   eBOOL,
   eREAL,
-  eINTEGER
+  eINTEGER,
+  eBINARY,
 } JSONType;
 
 /* Convert a JSONType to string representation */
@@ -157,6 +158,7 @@ class json_value;
 typedef std::vector<json_value> json_array;
 typedef std::map<std::string, json_value> json_object;
 typedef std::string json_string;
+typedef std::vector<uint8_t> json_binary;
 
 // integer types used internally within jalson - platform widest
 typedef long long json_int_t;
@@ -196,6 +198,9 @@ public:
   json_value(const json_array&);
   json_value(const json_object&);
 
+  json_value(const std::vector<uint8_t>& bin);
+  json_value(std::vector<uint8_t>&& bin);
+
   /* equality */
 
   bool operator==(const json_value& rhs) const;
@@ -213,6 +218,7 @@ public:
   static json_value make_int(long long v = 0);
   static json_value make_uint(unsigned long long v = 0);
   static json_value make_double(double v = 0.0);
+  static json_value make_binary(const void* data, size_t size);
 
   /* type query */
 
@@ -250,6 +256,8 @@ public:
   bool is_uint32() const { return m_impl.is_integer<uint32_t>(); }
   bool is_uint64() const { return m_impl.is_integer<uint64_t>(); }
 
+  bool is_binary() const { return type() == eBINARY; }
+
   /* access the value */
 
   bool& as_bool() { return m_impl.as_bool(); }
@@ -266,6 +274,9 @@ public:
 
   json_string& as_string() { return this->as<json_string>(); }
   const json_string& as_string() const { return this->as<json_string>(); }
+
+  json_binary& as_binary() { return this->as<json_binary>(); }
+  const json_binary& as_binary() const { return this->as<json_binary>(); }
 
   json_array& as_array() { return this->as<json_array>(); }
   const json_array& as_array() const { return this->as<json_array>(); }
@@ -339,6 +350,7 @@ private:
   static void ensure_type_is_json_container(json_array*) {}
   static void ensure_type_is_json_container(json_string*) {}
   static void ensure_type_is_json_container(json_object*) {}
+  static void ensure_type_is_json_container(json_binary*) {}
 
   internals::valueimpl m_impl;
 

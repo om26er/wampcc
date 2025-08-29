@@ -48,6 +48,7 @@ const char* type_to_str(JSONType t)
     case wampcc::eREAL    : return "real";
     case wampcc::eINTEGER : return "integer";
     case wampcc::eBOOL    : return "bool";
+    case wampcc::eBINARY  : return "binary";
     case wampcc::eNULL    : return "null";
     default            : return "invalid";
   }
@@ -85,6 +86,11 @@ void valueimpl::dispose_details(valueimpl::Details& d)
     case e_string :
     {
       delete d.data.string;
+      break;
+    }
+    case e_binary :
+    {
+      delete d.data.binary;
       break;
     }
     default: break;
@@ -151,6 +157,12 @@ valueimpl::valueimpl(json_string* a)
   details.data.string = a;
 }
 
+valueimpl::valueimpl(json_binary* a)
+  : details( init_details(valueimpl::e_binary) )
+{
+  details.data.binary = a;
+}
+
 valueimpl& valueimpl::operator=(valueimpl&& rhs) noexcept
 {
   this->details = rhs.details;  // bitwise
@@ -205,6 +217,11 @@ valueimpl::Details valueimpl::clone_details() const
       retval.data.string = new json_string(*details.data.string);
       break;
     }
+    case valueimpl::e_binary:
+    {
+      retval.data.binary = new json_binary(*details.data.binary);
+      break;
+    }
     default: break;
   }
   return retval;
@@ -231,6 +248,10 @@ bool valueimpl::operator==(const valueimpl& rhs) const
       case valueimpl::e_string:
       {
         return *(this->details.data.string) ==  *rhs.details.data.string;
+      }
+      case valueimpl::e_binary:
+      {
+        return *(this->details.data.binary) ==  *rhs.details.data.binary;
       }
       case valueimpl::e_bool:
       {
@@ -349,6 +370,22 @@ bool valueimpl::as_bool_unchecked() const
   return details.data.boolean;
 }
 
+json_binary& valueimpl::as_binary()
+{
+  if (details.type == e_binary)
+    return *details.data.binary;
+  else
+    throw type_mismatch(this->json_type(), eBINARY);
+}
+
+const json_binary& valueimpl::as_binary() const
+{
+  if (details.type == e_binary)
+    return *details.data.binary;
+  else
+    throw type_mismatch(this->json_type(), eBINARY);
+}
+
 
 /* Check if this and rhs are both integer types with equivalent value */
 bool valueimpl::equal_int_value(const valueimpl& rhs) const
@@ -450,6 +487,16 @@ json_value::json_value(unsigned long long i)
 {
 }
 
+json_value::json_value(const json_binary& bin)
+  : m_impl(new json_binary(bin))
+{
+}
+
+json_value::json_value(json_binary&& bin)
+  : m_impl(new json_binary(std::move(bin)))
+{
+}
+
 void json_value::swap(json_value& other)
 {
   this->m_impl.swap(other.m_impl);
@@ -523,6 +570,15 @@ json_value json_value::make_uint(unsigned long long v)
 json_value json_value::make_double(double v)
 {
   json_value retval(v);
+  return retval;
+}
+
+json_value json_value::make_binary(const void* data, size_t size)
+{
+  json_binary bin(static_cast<const uint8_t*>(data),
+                  static_cast<const uint8_t*>(data) + size);
+
+  json_value retval(std::move(bin));
   return retval;
 }
 

@@ -29,6 +29,7 @@ private:
   void pack_object(const json_object &);
   void pack_value(const json_value&);
   void pack_string(const std::string&);
+  void pack_binary(const json_binary& bin);
 };
 
 

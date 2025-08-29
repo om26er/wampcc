@@ -52,6 +52,24 @@ void msgpack_encoder::pack_string(const std::string& s)
   m_packer.pack_str_body(s.c_str(), s.size());
 }
 
+void msgpack_encoder::pack_binary(const json_binary& bin)
+{
+  if (bin.size() > (std::numeric_limits<t_msgpack_size>::max)())
+    throw msgpack_error("binary exceeds msgpack max size");
+
+#ifdef WAMPCC_TRACE_MSGPACK
+  std::cout << "pack_bin (len " << bin.size() << ")" << std::endl;
+#endif
+  m_packer.pack_bin(bin.size());
+
+#ifdef WAMPCC_TRACE_MSGPACK
+  std::cout << "pack_bin_body" << std::endl;
+#endif
+  m_packer.pack_bin_body(reinterpret_cast<const char*>(bin.data()), bin.size());
+}
+
+
+
 void msgpack_encoder::pack_object(const json_object& jobject)
 {
 #ifdef WAMPCC_TRACE_MSGPACK
@@ -100,6 +118,10 @@ void msgpack_encoder::pack_value(const json_value& jv)
       pack_string(jv.as_string());
       break;
     }
+    case wampcc::eBINARY: {
+      pack_binary(jv.as_binary());
+      break;
+    }
     case wampcc::eBOOL: {
       if (jv.as_bool() == true) {
 #ifdef WAMPCC_TRACE_MSGPACK
@@ -146,6 +168,7 @@ public:
    * parsing a map-key, we use it for a mapkey. */
   json_value* add(json_value&& jv)
   {
+
     switch (m_parse_mode) {
       case parse_mode::init: {
         m_root = std::move(jv);
@@ -359,11 +382,12 @@ public:
                         parsed_offset, error_offset);
   }
 
-  bool visit_bin(const char* /*v*/, uint32_t /*size*/)
+  bool visit_bin(const char* v, uint32_t size)
   {
 #ifdef WAMPCC_TRACE_MSGPACK
-    std::cout << m_indent << __FUNCTION__ << std::endl;
+    std::cout << m_indent << __FUNCTION__ << " size=" << size << std::endl;
 #endif
+    add(json_value::make_binary(v, size));
     return true;
   }
   bool visit_ext(const char* /*v*/, uint32_t /*size*/)
@@ -413,7 +437,8 @@ private:
     init,   /* the first item */
     array,  /* an array-cell */
     object, /* an object-item (value) */
-    mapkey  /* an object-item (key) */
+    mapkey,  /* an object-item (key) */
+    binary,
   } m_parse_mode = parse_mode::init;
 };
 

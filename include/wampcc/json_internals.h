@@ -57,6 +57,10 @@ struct traits<json_array>
   static const JSONType  TYPEID=eARRAY;
 };
 
+template<>
+struct traits<json_binary> {
+  static const JSONType  TYPEID=eBINARY;
+};
 
 class valueimpl
 {
@@ -70,6 +74,7 @@ private:
     e_bool,
     e_double,
     e_signed,
+    e_binary,
     e_unsigned,
   } JSONDetailedType;
 
@@ -81,13 +86,14 @@ public:
     JSONDetailedType type;
     union
     {
-      json_array*         array;
-      json_object*        object;
-      json_string*        string;
-      wampcc::json_uint_t uint;
-      wampcc::json_int_t  sint;
-      double              real;
-      bool                boolean;
+      json_array*          array;
+      json_object*         object;
+      json_string*         string;
+      wampcc::json_uint_t  uint;
+      wampcc::json_int_t   sint;
+      double               real;
+      bool                 boolean;
+      json_binary*         binary;
     } data;
   } details;
 
@@ -115,6 +121,7 @@ public:
   explicit valueimpl(json_array*);
   explicit valueimpl(json_object*);
   explicit valueimpl(json_string*);
+  explicit valueimpl(json_binary*);
 
   JSONType json_type() const
   {
@@ -127,6 +134,7 @@ public:
       case valueimpl::e_bool   : return eBOOL;
       case valueimpl::e_signed : return eINTEGER;
       case valueimpl::e_unsigned : return eINTEGER;
+      case valueimpl::e_binary : return eBINARY;
       case valueimpl::e_double : return eREAL;
       default: return eNULL;
     }
@@ -149,6 +157,8 @@ private:
         json_object& as_type(json_object*)        { return *details.data.object;  }
   const json_string& as_type(json_string*) const  { return *details.data.string;  }
         json_string& as_type(json_string*)        { return *details.data.string;  }
+  const json_binary& as_type(json_binary*) const  { return *details.data.binary; }
+        json_binary& as_type(json_binary*)        { return *details.data.binary; }
 
 public:
 
@@ -201,6 +211,8 @@ public:
   bool& as_bool();
 
   bool as_bool_unchecked() const;
+  json_binary& as_binary();
+  const json_binary& as_binary() const;
 
   valueimpl::Details clone_details() const;
 
