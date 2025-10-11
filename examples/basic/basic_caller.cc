@@ -10,11 +10,26 @@
 #include <assert.h>
 #include <iostream>
 #include <memory>
+#include <thread>
 
 using namespace wampcc;
 
+#define RANDOM_SIZE 700
+
+// Declare global array
+unsigned char random_bytes[RANDOM_SIZE];
+
+// Function to fill the array with random data
+void generate_random_bytes(void) {
+  srand((unsigned int) time(NULL));
+  for (int i = 0; i < RANDOM_SIZE; i++) {
+    random_bytes[i] = rand() % 256;
+  }
+}
+
 int main(int argc, char** argv)
 {
+  generate_random_bytes();
   try
   {
     const char* host = "0.0.0.0";
@@ -57,9 +72,6 @@ int main(int argc, char** argv)
     client_credentials credentials;
     credentials.realm="realm1";
     credentials.authid="john";
-    credentials.authmethods = {"cryptosign"};
-    credentials.public_key = "4bf3d505110f39d3268147a38776468c4291e2ad690ddcf86c7a3351f2a00c6f";
-    credentials.secret_fn = []() -> std::string { return "bf0ad88b15d75447e4f863e80a9d1033097ee368d3013ff9c1eb4a4deca3d096"; };
 
     auto logon_fut = session->hello(credentials);
 
@@ -70,20 +82,43 @@ int main(int argc, char** argv)
       throw std::runtime_error("session logon failed");
 
     /* Session is now open, call a remote procedure. */
-    const char raw_data[] = {0x01, 0x02, 0x03, 0x04, 0x05};
-    size_t raw_size = sizeof(raw_data);
-    json_value jbin = json_value::make_binary(raw_data, raw_size);
+    size_t raw_size = sizeof(random_bytes);
+    json_value jbin = json_value::make_binary(random_bytes, raw_size);
 
     wamp_args call_args;
     call_args.args_list = json_array({jbin});
+    using namespace std::chrono;
+    const auto interval = std::chrono::nanoseconds(10000);
+
+    while (true) {
+      auto start = steady_clock::now();
+
+      // Perform the RPC call
+      session->call(
+          rpc_uri, {}, call_args,
+          [=](wampcc::wamp_session&, wampcc::result_info r) {
+              try {
+                  // Example of result handling
+                  // json_value valRet = r.args.args_list[0];
+                  // json_binary bin = valRet.as_binary();
+                  // std::cout << "rpc result: " << bin.data() << std::endl;
+              } catch (...) {
+                  std::cerr << "exception in RPC result handler" << std::endl;
+              }
+          });
+
+      // Sleep so total loop time ≈ 10 ms
+      std::this_thread::sleep_until(start + interval);
+    }
+
     session->call(rpc_uri, {}, call_args,
                   [=, &ready_to_exit](wampcc::wamp_session&, result_info r) {
                     try {
-                      json_value valRet = r.args.args_list[0];
-                      json_binary bin = valRet.as_binary();
-                      assert(jbin == valRet);
-                      std::cout << "rpc result: " << bin.data() << std::endl;
-                      ready_to_exit.set_value();
+                      // json_value valRet = r.args.args_list[0];
+                      // json_binary bin = valRet.as_binary();
+                      // assert(jbin == valRet);
+                      // std::cout << "rpc result: " << bin.data() << std::endl;
+                      // ready_to_exit.set_value();
                     } catch (...) {
                       std::cerr << "exception: " << std::endl;
                     }

@@ -12,6 +12,19 @@
 
 using namespace wampcc;
 
+#define RANDOM_SIZE 700
+
+// Declare global array
+unsigned char random_bytes[RANDOM_SIZE];
+
+// Function to fill the array with random data
+void generate_random_bytes(void) {
+  srand((unsigned int) time(NULL));
+  for (int i = 0; i < RANDOM_SIZE; i++) {
+    random_bytes[i] = rand() % 256;
+  }
+}
+
 /* The callback function invoked when a wamp dealer has completed the procedure registration. */
 void rpc_registered(std::promise<void>& ready_to_exit, wamp_session& ws, registered_info info)
 {
@@ -27,18 +40,18 @@ void rpc_registered(std::promise<void>& ready_to_exit, wamp_session& ws, registe
 void rpc_called(wamp_session& ws, invocation_info invoke)
 {
   std::cout << "rpc invoked" << std::endl;
-  ws.yield(invoke.request_id, json_array({"hello", "world"}));
+  size_t raw_size = sizeof(random_bytes);
+  json_value jbin = json_value::make_binary(random_bytes, raw_size);
+  ws.yield(invoke.request_id, json_array({jbin}));
 }
 
 int main(int argc, char** argv)
 {
   try
   {
-    if (argc != 3)
-      throw std::runtime_error("arguments must be: ADDR PORT");
-
-    const char* host = argv[1];
-    int port = std::stoi(argv[2]);
+    const char* host = "127.0.0.1";
+    int port = 8080;
+    generate_random_bytes();
 
     /* Create the wampcc kernel, which provides event and IO threads. */
 
@@ -58,6 +71,9 @@ int main(int argc, char** argv)
     /* Using the connected socket, now create the wamp session object, using
        the WebSocket protocol. */
 
+    websocket_protocol::options ws_opts;
+    ws_opts.serialisers = static_cast<int>(serialiser_type::msgpack);
+
     std::promise<void> ready_to_exit;
     std::shared_ptr<wamp_session> session = wamp_session::create<websocket_protocol>(
       the_kernel.get(),
@@ -68,15 +84,13 @@ int main(int argc, char** argv)
             ready_to_exit.set_value();
           }
           catch (...) { /* ignore promise already set error */ }
-      }, {});
+      }, ws_opts);
 
     /* Logon to a WAMP realm, and wait for session to be deemed open. */
 
     client_credentials credentials;
-    credentials.realm="default_realm";
-    credentials.authid="peter";
-    credentials.authmethods = {"wampcra"};
-    credentials.secret_fn = []() -> std::string { return "secret2"; };
+    credentials.realm="realm1";
+    credentials.authid="john";
 
     auto logon_fut = session->hello(credentials);
 
@@ -88,7 +102,7 @@ int main(int argc, char** argv)
 
     /* Session is now open, register an RPC. */
 
-    session->provide("greeting2", json_object(),
+    session->provide("greeting", json_object(),
                      [&ready_to_exit](wamp_session& ws, registered_info info){
                        rpc_registered(ready_to_exit, ws, info);
                      },
